@@ -13,6 +13,10 @@
       - Method 2: - Clone this git repo then run `./FreeSudo.sh`.  If there were no errors, it should've completed this change for you. \
                     You can verify this by checking if a `/etc/sudoers.d/$USER` file exists and contains `$USER ALL=(ALL) NOPASSWD: ALL` in it.
      
+This is a forked and customized distribution of dArkOS from christianhaitian (https://github.com/christianhaitian/dArkOS)
+
+The goal of this distribution is to remove all potential bloat while simultaneously adding tools that enable users to add exactly what they wish to their system without the need for re-flashing. The primary focus will be on the RG503 device, rk3566 chipset, but I intent to continue to make the updates compatible with all versions for the foreseeable future.
+
 Now you should be able to just run make <device_name> to build for a supported device.  Example: `make rg353m`
 
 **Notes**

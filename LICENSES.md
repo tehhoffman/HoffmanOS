@@ -10,6 +10,6 @@ HoffmanOS is a Linux distribution that is made up of many open-source components
 * ShareAlike — If you remix, transform, or build upon the material, you must distribute your contributions under the same license as the original.
 
 ### HoffmanOS Software
-Copyright 2021-present HoffmanOS
+Copyright 2025-present HoffmanOS
 
 Original software and scripts developed by the HoffmanOS team are licensed under the terms of the [MIT License](https://choosealicense.com/licenses/mit/).
