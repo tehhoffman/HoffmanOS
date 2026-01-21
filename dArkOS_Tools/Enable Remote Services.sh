@@ -21,7 +21,15 @@ if [ ! -z "$GW" ]; then
   #sudo systemctl enable nmbd
   #sudo systemctl enable ssh
   sudo systemctl start ssh.service
-  sudo filebrowser -a 0.0.0.0 -p 80 -d /home/ark/.config/filebrowser.db -r / &
+  FILEBROWSER_BIN="/usr/local/bin/filebrowser"
+  if [ ! -x "$FILEBROWSER_BIN" ]; then
+    FILEBROWSER_BIN="$(command -v filebrowser)"
+  fi
+  if [ -x "$FILEBROWSER_BIN" ]; then
+    sudo nohup "$FILEBROWSER_BIN" -a 0.0.0.0 -p 80 -d /home/ark/.config/filebrowser.db -r / > /tmp/filebrowser.log 2>&1 &
+  else
+    printf "\n\n\e[91mFilebrowser binary not found. Please reinstall filebrowser.\n"
+  fi
   printf "\n\n\n\e[32mRemote Services have been enabled.\n"
   printf "Your IP is: " && ip route | awk '/src/ { print $9 }' && printf "\n\n"
   sleep 5
