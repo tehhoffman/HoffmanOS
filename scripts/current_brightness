@@ -1,0 +1,6 @@
+#!/bin/bash
+
+curbright=$(cat /sys/class/backlight/backlight/brightness);
+maxbright=255;
+
+echo $((200 * $curbright/$maxbright - 100 * $curbright/$maxbright ))

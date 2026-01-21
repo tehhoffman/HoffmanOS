@@ -1,0 +1,6 @@
+Arkbuild_ccache/
+Arkbuild_package_cache/
+Arkbuild/
+*.log
+wget-log.*
+build.log.*

@@ -1,0 +1,14 @@
+[Unit]
+Description=HoffmanOS firstboot
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/boot
+ExecStart=/boot/firstboot.sh
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
+
+

@@ -1,0 +1,36 @@
+#!/bin/bash
+
+case $1 in
+   pre)
+        #Blank screen so it seems like sleep enters quicker than it really does
+        echo $(cat /sys/devices/platform/backlight/backlight/backlight/brightness) > /var/local/cur_bright.state
+        echo 0 > /sys/devices/platform/backlight/backlight/backlight/brightness
+	# Check if this is a OGA BE unit with builtin wifi
+	esp=$(lsmod | grep esp8089 | awk '{print $1}')
+	# workaround until dwc2 is fixed
+	modprobe -r dwc2
+	/usr/sbin/alsactl store -f /var/local/asound.state
+	if [ -f "/usr/local/bin/quickmode.sh" ]; then
+	  touch /dev/shm/.JUSTWOKEUP
+	fi
+	# if this is a OGA BE unit, remove the wifi driver and restore on wake
+	if [ "$esp" = "esp8089" ]; then
+		rmmod esp8089
+		touch /home/ark/.config/esp8089exists
+	fi
+	;;
+   post)
+        echo $(cat /var/local/cur_bright.state) > /sys/devices/platform/backlight/backlight/backlight/brightness
+	/usr/sbin/alsactl restore -f /var/local/asound.state
+	modprobe -r dwc2
+	modprobe -i dwc2
+	sleep 2
+	# sudo systemctl restart ogage
+	systemctl is-active --quiet killer_daemon && sudo systemctl restart killer_daemon
+	systemctl is-active --quiet batt_led.service && sudo systemctl restart batt_led
+	if [ -f "/home/ark/.config/esp8089exists" ]; then
+		modprobe -i esp8089
+		rm /home/ark/.config/esp8089exists
+	fi
+	;;
+esac

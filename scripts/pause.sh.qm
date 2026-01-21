@@ -1,0 +1,11 @@
+#!/bin/bash
+if [ ! -e "/home/ark/.config/.SWAPPOWERANDSUSPEND" ]; then
+  sudo systemctl suspend
+else
+  if [ ! -e "/dev/shm/.JUSTWOKEUP" ]; then
+    /usr/local/bin/quickmode.sh
+    sudo systemctl poweroff
+  else
+    rm /dev/shm/.JUSTWOKEUP
+  fi
+fi

@@ -1,0 +1,7 @@
+#!/bin/bash
+if [ ! -e "/home/ark/.config/.SWAPPOWERANDSUSPEND" ]; then
+  /usr/local/bin/quickmode.sh
+  sudo systemctl poweroff
+else
+  sudo systemctl suspend
+fi

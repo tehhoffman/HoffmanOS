@@ -1,0 +1,10 @@
+[Unit]
+Description=Audio State
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStop=/usr/sbin/alsactl store -f /var/local/asound.state
+
+[Install]
+WantedBy=multi-user.target
