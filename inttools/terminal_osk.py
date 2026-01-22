@@ -26,6 +26,8 @@ ASCII_BLOCK = '█'
 SMALL_SCREEN_COLS = 60
 SMALL_SCREEN_ROWS = 26
 MAX_OUTPUT_LINES = 800
+MIN_OUTPUT_ROWS = 8
+OUTPUT_SCROLL_STEP = 5
 
 PALETTE = [
     ('input',      'dark gray', 'light gray'),
@@ -33,7 +35,8 @@ PALETTE = [
     ('prompt',     'dark red',  'dark cyan'),
     ('body',       'black',     'light gray'),
     ('bg',         'white',     'dark blue'),
-    ('focus key',  'white',     'dark blue'),
+    # Focus highlight for OSK keys (must contrast with 'bg')
+    ('focus key',  'black',     'yellow'),
     ('header',     'light cyan','dark blue'),
     ('button',     'black',     'light gray'),
     ('selected',   'white',     'dark blue'),
@@ -41,6 +44,14 @@ PALETTE = [
     ('label selected', 'yellow', 'dark blue'),
     ('error',      'dark red',  'light gray'),
 ]
+
+
+class SelectableText(urwid.Text):
+    def selectable(self):
+        return True
+
+    def keypress(self, size, key):
+        return key
 
 
 class CenteredButton(WidgetWrap):
@@ -116,18 +127,32 @@ class KeyButton(CenteredButton):
 
 class WrappableColumns(Columns):
     def keypress(self, size, key):
-        if self.__super.keypress(size, key):
-            if key not in ('left', 'right'):
-                return key
-            if key in ('left'):
-                widgets = list(range(len(self.contents) - 1, -1, -1))
-            else:
-                widgets = list(range(0, len(self.contents)))
-            for i in widgets:
-                if not self.contents[i][0].selectable():
-                    continue
-                self.focus_position = i
-                break
+        unhandled = self.__super.keypress(size, key)
+        if not unhandled:
+            return
+
+        if key not in ('left', 'right'):
+            return key
+
+        selectable = [i for i, (w, _opts) in enumerate(self.contents) if w.selectable()]
+        if not selectable:
+            return key
+
+        first_sel = selectable[0]
+        last_sel = selectable[-1]
+
+        # If we're at the edge of the row, let the parent (e.g. the outer OSK
+        # Columns) handle left/right so we can move into other columns.
+        if key == 'right' and self.focus_position == last_sel:
+            return key
+        if key == 'left' and self.focus_position == first_sel:
+            return key
+
+        # Otherwise, wrap within the row.
+        if key == 'left':
+            self.focus_position = last_sel
+        else:
+            self.focus_position = first_sel
 
 
 class ViewExit(Exception):
@@ -146,6 +171,9 @@ class TerminalUI:
         self.pending_cmd = None
         self.mode = "cmd"
         self.input_text = ""
+        self.history = []
+        self.history_index = None
+        self.output_follow = True
 
         self.output_walker = urwid.SimpleListWalker([])
         self.output_list = urwid.ListBox(self.output_walker)
@@ -173,9 +201,7 @@ class TerminalUI:
 
         input_area = Pile([
             ('pack', input_box),
-            ('pack', Divider()),
             osk_box,
-            ('pack', Divider()),
             ('pack', buttons),
         ])
         input_area = LineBox(input_area, title="Command")
@@ -186,18 +212,21 @@ class TerminalUI:
             _, input_rows = input_area.pack((self.screen_cols,))
         except Exception:
             input_rows = osk_rows + 6
-        max_input_rows = max(10, self.screen_rows - 3)
+        # Ensure the output pane always has usable space.
+        header_rows = 1
+        max_input_rows = max(8, self.screen_rows - header_rows - MIN_OUTPUT_ROWS)
         input_rows = max(8, min(input_rows, max_input_rows))
         footer = urwid.BoxAdapter(input_area, input_rows)
 
         self.header_text = Text(self.header_line(), align='center')
         header = AttrWrap(self.header_text, 'header')
         body = AttrWrap(self.output_box, 'bg')
-        self.frame = Frame(body, header=header, footer=footer, focus_part='body')
+        self.frame = Frame(body, header=header, footer=footer, focus_part='footer')
 
         self.append_output("HoffmanOS terminal ready.")
-        self.append_output("Use the on-screen keyboard and press Run.")
-        self.append_output("Type 'exit' to quit.")
+        self.append_output("D-pad/Left Thumb to move, A to select, B to backspace")
+        self.append_output("Right Thumb to scroll output, X button to run.")
+        self.append_output("Start+Select to quit")
         self.render_input()
 
     def header_line(self):
@@ -213,7 +242,7 @@ class TerminalUI:
 
     def build_osk(self):
         Key = self.add_osk_key
-        osk = Pile([
+        left = Pile([
             WrappableColumns([
                 (1, Text(" ")),
                 (3, Key('`', shifted='~')),
@@ -231,7 +260,6 @@ class TerminalUI:
                 (3, Key('=', shifted='+')),
                 (1, Text(" ")),
             ], 0),
-            Divider(),
             WrappableColumns([
                 (3, Key('q')),
                 (3, Key('w')),
@@ -247,7 +275,6 @@ class TerminalUI:
                 (3, Key(']', shifted='}')),
                 (3, Key('\\', shifted='|')),
             ], 0),
-            Divider(),
             WrappableColumns([
                 (3, Text(" ")),
                 (3, Key('a')),
@@ -262,7 +289,6 @@ class TerminalUI:
                 (3, Key(';', shifted=':')),
                 (3, Key('\'', shifted='"')),
             ], 0),
-            Divider(),
             WrappableColumns([
                 (4, Text(" ")),
                 (3, Key('z')),
@@ -276,7 +302,6 @@ class TerminalUI:
                 (3, Key('.', shifted='>')),
                 (3, Key('/', shifted='?')),
             ], 0),
-            Divider(),
             WrappableColumns([
                 (1, Text(" ")),
                 (9, Key('↑ Shift', shifted='↑ SHIFT', callback=self.shift_key_press)),
@@ -285,11 +310,34 @@ class TerminalUI:
                 (2, Text(" ")),
                 (10, Key('Delete ←', callback=self.bksp_key_press)),
             ], 0),
-            Divider(),
         ])
 
-        if self.small_display and len(osk.contents) > 0:
-            osk.contents.pop(len(osk.contents) - 1)
+        # Older versions of this UI added a trailing Divider; keep small-screen
+        # compatibility without accidentally removing a real keyboard row.
+        if self.small_display and len(left.contents) > 0:
+            last_widget = left.contents[-1][0]
+            if isinstance(last_widget, Divider):
+                left.contents.pop(len(left.contents) - 1)
+
+        # Right-side "terminal helpers" column to use otherwise blank space.
+        # These are aimed at non-interactive command entry.
+        right = Pile([
+            ('pack', Key('Esc', callback=self.esc_key_press)),
+            ('pack', Key('Tab', callback=self.tab_key_press)),
+            ('pack', Key('↑Hist', callback=self.history_prev)),
+            ('pack', Key('↓Hist', callback=self.history_next)),
+            ('pack', Key('Enter', callback=self.enter_key_press)),
+        ])
+        right = Padding(right, left=0, right=0)
+
+        osk = Columns(
+            [
+                ('weight', 1, left),
+                ('fixed', 10, right),
+            ],
+            dividechars=1,
+            focus_column=0,
+        )
 
         return osk
 
@@ -319,6 +367,60 @@ class TerminalUI:
             self.input_text = self.input_text[:-1]
             self.render_input()
 
+    def esc_key_press(self, key=None):
+        # Acts as "cancel/clear" rather than quitting the whole app.
+        if self.mode == "sudo":
+            self.mode = "cmd"
+            self.pending_cmd = None
+            self.input_text = ""
+            self.append_output("Cancelled sudo password entry.")
+            self.render_input()
+            return
+        if self.input_text:
+            self.input_text = ""
+            self.render_input()
+
+    def tab_key_press(self, key=None):
+        # Tab completion isn't available (non-interactive), but tab-as-indent is useful.
+        self.input_text += "    "
+        self.render_input()
+
+    def enter_key_press(self, key=None):
+        self.run_button()
+
+    def history_prev(self, key=None):
+        if not self.history:
+            return
+        if self.history_index is None:
+            self.history_index = len(self.history) - 1
+        else:
+            self.history_index = max(0, self.history_index - 1)
+        self.input_text = self.history[self.history_index]
+        self.render_input()
+
+    def history_next(self, key=None):
+        if self.history_index is None:
+            return
+        if (self.history_index + 1) >= len(self.history):
+            self.history_index = None
+            self.input_text = ""
+        else:
+            self.history_index += 1
+            self.input_text = self.history[self.history_index]
+        self.render_input()
+
+    def add_history(self, cmd):
+        cmd = (cmd or "").strip()
+        if not cmd:
+            return
+        if self.history and self.history[-1] == cmd:
+            self.history_index = None
+            return
+        self.history.append(cmd)
+        if len(self.history) > 200:
+            self.history = self.history[-200:]
+        self.history_index = None
+
     def render_input(self):
         if self.mode == "sudo":
             shown = "*" * len(self.input_text)
@@ -334,10 +436,22 @@ class TerminalUI:
         if not lines:
             lines = [""]
         for line in lines:
-            self.output_walker.append(Text(line))
+            self.output_walker.append(SelectableText(line))
         if len(self.output_walker) > MAX_OUTPUT_LINES:
             del self.output_walker[0:len(self.output_walker) - MAX_OUTPUT_LINES]
-        self.output_list.set_focus(len(self.output_walker) - 1)
+        if self.output_follow and len(self.output_walker) > 0:
+            self.output_list.set_focus(len(self.output_walker) - 1)
+
+    def scroll_output(self, delta):
+        if not self.output_walker:
+            return
+        try:
+            cur = self.output_list.focus_position
+        except Exception:
+            cur = len(self.output_walker) - 1
+        new = max(0, min(len(self.output_walker) - 1, cur + delta))
+        self.output_list.set_focus(new)
+        self.output_follow = (new == (len(self.output_walker) - 1))
 
     def clear_output(self):
         self.output_walker.clear()
@@ -366,6 +480,8 @@ class TerminalUI:
         cmd = self.input_text.strip()
         if not cmd:
             return
+        self.add_history(cmd)
+        self.output_follow = True
         self.input_text = ""
         self.render_input()
         self.run_command(cmd)
@@ -504,15 +620,40 @@ class TerminalUI:
         if key == 'backspace':
             self.bksp_key_press()
             return
+        if key in ('page up', 'pageup'):
+            self.scroll_output(-OUTPUT_SCROLL_STEP)
+            return
+        if key in ('page down', 'pagedown'):
+            self.scroll_output(OUTPUT_SCROLL_STEP)
+            return
         if isinstance(key, str) and len(key) == 1 and 32 <= ord(key) <= 126:
             self.input_text += key
             self.render_input()
             return
 
+    def input_filter(self, keys, raw):
+        # Global controller shortcuts that must work regardless of focus.
+        # (e.g. if focus is on an OSK key, "enter" would just activate it)
+        if not keys:
+            return keys
+        out = []
+        for k in keys:
+            if k == 'f5':  # RUN (mapped from controller X in keys.gptk)
+                self.run_button()
+                continue
+            out.append(k)
+        return out
+
     def main(self):
         tty_in = open('/dev/tty1', 'r')
         screen = urwid.raw_display.Screen(input=tty_in)
-        loop = urwid.MainLoop(self.frame, PALETTE, screen=screen, unhandled_input=self.unhandled_input)
+        loop = urwid.MainLoop(
+            self.frame,
+            PALETTE,
+            screen=screen,
+            unhandled_input=self.unhandled_input,
+            input_filter=self.input_filter,
+        )
         loop.run()
 
 

@@ -2,8 +2,8 @@ back = esc
 start = enter
 a = enter
 b = backspace
-b = repeat
-x = \"
+# Map X to a distinct key so it can be handled as "RUN"
+x = f5
 y = \"
 l1 = pageup
 l2 = \"
@@ -19,7 +19,8 @@ left_analog_up = up
 left_analog_down = down
 left_analog_left = left
 left_analog_right = right
-right_analog_up = \"
-right_analog_down = \"
+# Use the right stick vertical axis to scroll output.
+right_analog_up = pageup
+right_analog_down = pagedown
 right_analog_left = \"
 right_analog_right = \"
