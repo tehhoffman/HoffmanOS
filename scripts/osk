@@ -3,6 +3,9 @@
 ##################################################################
 # Created by Christian Haitian for use to display a python       #
 # based keyboard to the user.                                    #
+#								 #
+# Modified by Robert Hoffman to provide a more traditional	 #
+# keyboard layout.						 #
 ##################################################################
 
 if [[ ! -e "/dev/input/by-path/platform-odroidgo2-joypad-event-joystick" ]]; then

@@ -15,6 +15,7 @@ sudo rm -rf Arkbuild/home/ark/gptokeyb
 sudo cp inttools/* Arkbuild/opt/inttools/
 call_chroot "chown -R ark:ark /opt/inttools"
 sudo chmod 777 Arkbuild/opt/inttools/osk.py
+sudo chmod 777 Arkbuild/opt/inttools/terminal_osk.py
 
 # Copy some other tools that make use of gptokeyb
 sudo cp scripts/osk Arkbuild/usr/bin/
